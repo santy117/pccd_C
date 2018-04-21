@@ -3,10 +3,10 @@
 #include <unistd.h>
 #include <pthread.h>
 
-typedef{
+typedef struct{
+	long tipo;
 	int idNodo;
 	int pid;
-	int tipo;
 }proceso;
 
 //Tipos de procesos según prioridades
