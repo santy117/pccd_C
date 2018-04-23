@@ -5,6 +5,7 @@
 #include <sys/types.h>
 #include <sys/msg.h>
 #include <sys/ipc.h>
+#include <sys/wait.h>
 
 typedef struct{
 	long type;
@@ -30,8 +31,8 @@ void anulacion(void);
 void reserva(void);
 void evento(void);
 void grada(void);
-void pedirTestigo(void);
-void devolverTestigo(void);
+void entradaSC(int);
+void salidaSC(int);
 
 int main(int argc, char* argv[]){
 	int prueba = atoi(argv[1]);
@@ -40,13 +41,49 @@ int main(int argc, char* argv[]){
 	char* path="/bin/ls";
 	key_t key = ftok(path, idNodo);
 	msqid = msgget(key, IPC_CREAT|0666);
-
+	if(msqid==-1){
+		printf("Error al crear cola de mensajes\n");
+	}
+	int pid, i;
 	switch(prueba){
 		case 1:
-			printf("\n");
+			printf("Prueba 1: 100 procesos de eventos y 200 de gradas en un nodo\n");
+			for(i=0; i<100; i++){
+				pid = fork();
+				if(pid == -1){
+					printf("Error al crear proceso hijo");
+					exit(0);
+				}
+				else if(pid == 0){
+					evento();
+				}
+			}
+			for(i=0; i<200; i++){
+				pid = fork();
+				if(pid == -1){
+					printf("Error al crear proceso hijo");
+					exit(0);
+				}
+				else if(pid == 0){
+					grada();
+				}
+			}
 			break;
 		case 2:
-			printf("\n");
+			printf("Prueba 2: 200 prrocesos de pagos\n");
+			for(i=0; i<200; i++){
+				pid = fork();
+				if(pid == -1){
+					printf("Error al crear proceso hijo");
+					exit(0);
+				}
+				else if(pid == 0){
+					pago();
+				}
+			}
+			for(i=0; i<200; i++){
+				wait(&pid);
+			}
 			break;
 		case 3:
 			printf("\n");
@@ -83,27 +120,27 @@ int main(int argc, char* argv[]){
 void pago(){
 	printf("PAGO %i: Creado proceso\n", getpid());
 	printf("PAGO %i: Intentando entrar en la SC\n", getpid());
-	pedirTestigo();
+	entradaSC(tipoPago);
 	printf("PAGO %i: Dentro de la SC\n", getpid());
-	devolverTestigo();
+	salidaSC(tipoPago);
 	printf("PAGO %i: Fuera de la SC\n", getpid());
 }
 
 void anulacion(){
 	printf("ANULACION %i: Creado proceso\n", getpid());
 	printf("ANULACION %i: Intentando entrar en la SC\n", getpid());
-	pedirTestigo();
+	entradaSC(tipoAnulacion);
 	printf("ANULACION %i: Dentro de la SC\n", getpid());
-	devolverTestigo();
+	salidaSC(tipoAnulacion);
 	printf("ANULACION %i: Fuera de la SC\n", getpid());
 }
 
 void reserva(){
 	printf("RESERVA %i: Creado proceso\n", getpid());
 	printf("RESERVA %i: Intentando entrar en la SC\n", getpid());
-	pedirTestigo();
+	entradaSC(tipoReserva);
 	printf("RESERVA %i: Dentro de la SC\n", getpid());
-	devolverTestigo();
+	salidaSC(tipoReserva);
 	printf("RESERVA %i: Fuera de la SC\n", getpid());
 
 }
@@ -111,26 +148,27 @@ void reserva(){
 void evento(){
 	printf("EVENTO %i: Creado proceso\n", getpid());
 	printf("EVENTO %i: Intentando entrar en la SC\n", getpid());
-	pedirTestigo();
+	entradaSC(tipoGradaEvento);
 	printf("EVENTO %i: Dentro de la SC\n", getpid());
-	devolverTestigo();
+	salidaSC(tipoGradaEvento);
 	printf("EVENTO %i; Fuera de la SC\n", getpid());
 }
 
 void grada(){
 	printf("GRADA %i: Creado procesoo\n", getpid());
 	printf("GRADA %i: Intentando entrar en la SC\n", getpid());
-	pedirTestigo();
+	entradaSC(tipoGradaEvento);
 	printf("GRADA %i: Dentro de la SC\n", getpid());
-	devolverTestigo();
+	salidaSC(tipoGradaEvento);
 	printf("GRADA %i: Fuera de la SC\n", getpid());
 }
 
-void pedirTestigo(){
+//Si se solicita la entrada a la SC se enviará un mensaje de tipo 1
+void entradaSC(int tipoProceso){
 	proceso p;
-	p.type = 0;
+	p.type = 1;
 	p.idNodo = idNodo;
-	p.tipo = tipoPago;
+	p.tipo = tipoProceso;
 	p.pid = getpid();
 
 	int status = msgsnd(msqid, &p, sizeof(proceso), 0);
@@ -145,11 +183,12 @@ void pedirTestigo(){
 	}
 }
 
-void devolverTestigo(){
+//Si se notifica la salida a la SC se envia un mensaje de tipo 2
+void salidaSC(int tipoProceso){
 	proceso p;
-	p.type = 0;
+	p.type = 2;
 	p.idNodo = idNodo;
-	p.tipo = tipoPago;
+	p.tipo = tipoProceso;
 	p.pid = getpid();
 
 	int status = msgsnd(msqid, &p, sizeof(proceso), 0);
