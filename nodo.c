@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <semaphore.h>
+#include <string.h>
 #include <sys/types.h>
 #include <sys/msg.h>
 #include <sys/ipc.h>
@@ -61,7 +62,7 @@ sem_t semaforoExclusionMutuaDentro;
 int idNodo;
 int msqidNodo;
 int msqidInterNodo;
-int idOtrosNodos[numMaxNodos] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+int idOtrosNodos[numMaxNodos+1] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 int peticiones[numMaxNodos+1] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 int atendidas[numMaxNodos+1] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 int leyendo[numMaxNodos+1] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -73,7 +74,7 @@ int nodos;
 
 int numProcesos[5] = {0, 0, 0, 0, 0};
 Lista *lista[5];
-int procLeyendo[lectoresSC];
+int procLeyendo[numMaxNodos+1];
 
 
 //Cabeceras funciones
@@ -86,7 +87,7 @@ void addPetition(proceso);
 
 
 int main(int argc, char* argv[]){
-	int i;
+	int i, status;
 	for(i=0; i<lectoresSC+1; i++){
 		procLeyendo[i] = 0;
 	}
@@ -134,12 +135,67 @@ int main(int argc, char* argv[]){
 	pthread_create(&hiloReceptorNodo, NULL, receptorNodo, NULL);
 
 	while(1){
-		printf("Nodo %i: reqTestigo=%i\n", idNodo, token);
+		printf("Nodo %i: Testigo=%i\n", idNodo, token);
 		while(token==0);
+		printf("Nodo %i: Esperando a recibir peticiones del testigo\n", idNodo);
+		reqTestigo request;
+		status = msgrcv(msqidInterNodo, &request, sizeof(reqTestigo), idNodo, 0);
+		if(status == -1){
+			printf("Nodo %i: Error al recibir petición de tesigo\n", idNodo);
+			exit(0);
+		}
 		sem_wait(&semaforoExclusionMutua);
+		printf("Nodo %i: Petición enviada por %i\n", idNodo, request.idNodoEmisor);
+		printf("\t\tPrioridad de petición %i\n", request.prioridad);
+		prioridades[request.idNodoEmisor] = request.prioridad;
+		atendidas[request.idNodoEmisor] = request.num;
+		if(request.prioridad==tipoPago && numProcesos[tipoPago]==0){
+			sendToken(request.idNodoEmisor);
+		}
+		else if(request.prioridad==tipoAnulacion && numProcesos[tipoAnulacion]==0){
+			int envio = 0;
+			for(i=0; i<sizeof(prioridades); i++){
+				if(prioridades[i]==tipoPago){
+					envio = i;
+				}
+			}
+			if(envio!=0){
+				sendToken(idOtrosNodos[i]);
+			}
+			else{
+				sendToken(request.idNodoEmisor);
+			}
+		}
+		else if(request.prioridad==tipoReserva && numProcesos[tipoReserva]==0){
+			int envio = 0;
+			for(i=0; i<sizeof(prioridades); i++){
+				if(prioridades[i]==tipoAnulacion){
+					envio = i;
+				}
+			}
+			if(envio != 0){
+				sendToken(idOtrosNodos[i]);
+			}
+			else{
+				sendToken(request.idNodoEmisor);
+			}
+		}
+		else if(request.prioridad==tipoGradaEvento && numProcesos[tipoGradaEvento]==0){
+			int envio = 0;
+			for(i=0; i<sizeof(prioridades); i++){
+				if(prioridades[i]==tipoReserva){
+					envio = i;
+				}
+			}
+			if(envio != 0){
+				sendToken(idOtrosNodos[i]);
+			}
+			else{
+				sendToken(request.idNodoEmisor);
+			}
+		}
 		sem_post(&semaforoExclusionMutua);
 	}
-
 
 	return 0;
 }
@@ -148,25 +204,21 @@ void requestToken(){
 	reqTestigo request;
 	int i = 0, status;
 	request.idNodoEmisor = idNodo;
+	request.num = myNum;
 	if(numProcesos[tipoPago]>0){
 		request.prioridad = tipoPago;
-		request.num = numProcesos[tipoPago];
 	}
 	else if(numProcesos[tipoAnulacion]>0){
 		request.prioridad = tipoAnulacion;
-		request.num = numProcesos[tipoAnulacion];
 	}
 	else if(numProcesos[tipoReserva]>0){
 		request.prioridad = tipoReserva;
-		request.num = numProcesos[tipoReserva];
 	}
 	else if(numProcesos[tipoGradaEvento]>0){
 		request.prioridad = tipoGradaEvento;
-		request.num = numProcesos[tipoGradaEvento];
 	}
 	else{
 		request.prioridad = 0;
-		request.num = 0;
 	}
 	for(i=0; i<numMaxNodos; i++){
 		if(idOtrosNodos[i]==idNodo){
@@ -191,16 +243,14 @@ void sendToken(int idNodoReceptor){
 	token = 0;
 	testigo t;
 	t.idNodoReceptor = idNodoReceptor;
-	t.vectorAtendidas = atendidas;
-	t.vectorLeyendo = leyendo;
-	// **Falta código para enviar el vector de atendidas
+	memcpy(t.vectorAtendidas, atendidas, sizeof(atendidas));
+	memcpy(t.vectorLeyendo, leyendo, sizeof(leyendo));
 
-	int status = msgsnd(idInterNodo, &t, sizeof(testigo), 0);
+	int status = msgsnd(msqidInterNodo, &t, sizeof(testigo), 0);
 	if(status == -1){
 		printf("Nodo %i: Error al enviar testigo\n", idNodo);
 		exit(0);
 	}
-
 	//Función sin implementar comprueba si tenemos peticiones sin atender y pide el testigo
 	//pendingMessages();
 }
@@ -224,6 +274,9 @@ void *receptorNodo(){
 			printf("Nodo %i: Recibido mensaje del proceso %i de tipo %i para salida de SC", idNodo, p.pid, p.tipo);
 			sem_wait(&semaforoExclusionMutuaDentro);
 			dentro = 0;
+			myNum++;
+			if(p.tipo==tipoGradaEvento)
+				procLeyendo[idNodo]--;
 			sem_post(&semaforoExclusionMutuaDentro);
 		}
 		else if(p.type == 1){
@@ -237,16 +290,18 @@ void *receptorNodo(){
 }
 
 void addPetition(proceso p){
-	printf("Nodo %i: añadida petición\n", idNodo);
-	proceso pRespuesta;
-	pRespuesta.type = p.pid;
-	pRespuesta.pid = p.pid;
-	int status = msgsnd(msqidNodo, &pRespuesta, sizeof(proceso), 0);
-
-	if(status == -1){
-		printf("Error\n");
-		exit(0);
+	printf("Nodo %i: Recibe peticion\n", idNodo);
+	printf("\t\tProceso: %i\n", p.pid);
+	printf("\t\tTipo: %i\n", p.tipo);
+	Lista *l, *aux;
+	l = lista[p.tipo];
+	while(l->siguiente!=NULL){
+		l = l->siguiente;
 	}
+	aux->pid = p.pid;
+	aux->tipo = p.tipo;
+	aux->siguiente = NULL;
+	l->siguiente = aux;
 }
 
 void *receptorInterNodo(){
@@ -254,11 +309,11 @@ void *receptorInterNodo(){
 	int status;
 	while(1){
 		if(token==1)
-			printf("Nodo %i: Testigo\n", idNodo);
+			printf("Nodo %i: Testigo=1\n", idNodo);
 		while(token==1);
 
 		printf("Nodo %i: Esperando por el Testigo\n", idNodo);
-		status = msgrcv(msqidInterNodo, &t, sizeof(testigo), 0, 0);
+		status = msgrcv(msqidInterNodo, &t, sizeof(testigo), idNodo, 0);
 		if(status == -1){
 			printf("Nodo %i: Error al intentar recibir Testigo\n", idNodo);
 			exit(0);
@@ -294,100 +349,76 @@ void *receptorInterNodo(){
 			sendToken(nodoConLectores);
 		}
 		else{
-			//Si no hay procesos leyendo podemos atender a los procesos escritores
-			//Variables en las que se comprar si otros nodos tienen procesos prioritarios
-			int pPagos= 0, pAnulaciones = 0, pReservas=0, pGradasEventos=0,i;
-			for(i=0; i<numMaxNodos+1; i++){
-				if(prioridades[i]==tipoPago){
-					pPagos = i;
-				}
-				else if(prioridades[i]==tipoAnulacion){
-					pAnulaciones = i;
-				}
-				else if(prioridades[i]==tipoReserva){
-					pReservas = i;
-				}
-				else if(prioridades[i]==tipoGradaEvento){
-					pGradasEventos = i;
-				}
-			}
+			//Si no hay procesos leyendo podemos atendemos al procesos escritor más prioritario
 			if(numProcesos[tipoPago]>0){
-				//Hay procesos de pagos en el nodo y se atienden
+				//Hay procesos de pagos en el nodo y se atienden el primero
 				proceso p;
 				p.idNodo = idNodo;
-				while(lista[tipoPago]!= NULL){
-					p.pid = lista[tipoPago]->pid;
-					p.type = lista[tipoPago]->pid;
-					while(dentro==1);
-					sem_wait(&semaforoExclusionMutuaDentro);
-					dentro = 1;
-					sem_post(&semaforoExclusionMutuaDentro);
-					status = msgsnd(msqidNodo, &p, sizeof(proceso), 0);
-					if(status == -1){
-						printf("Nodo %i: Error al enviar mensaje para permitir entrar en la SC al proceso %i\n", idNodo, lista[tipoPago]->pid);
-						exit(0);
-					}
-					lista[tipoPago] = lista[tipoPago]->siguiente;
-					numProcesos[tipoPago]--; //Decrementamos el contador de procesos de pago
+				p.pid = lista[tipoPago]->pid;
+				p.type = lista[tipoPago]->pid;
+				while(dentro==1);
+				sem_wait(&semaforoExclusionMutuaDentro);
+				dentro = 1;
+				sem_post(&semaforoExclusionMutuaDentro);
+				status = msgsnd(msqidNodo, &p, sizeof(proceso), 0);
+				if(status == -1){
+					printf("Nodo %i: Error al enviar mensaje a proceso %i\n", idNodo, lista[tipoPago]->pid);
+					exit(0);
 				}
+				lista[tipoPago] = lista[tipoPago]->siguiente;
+				numProcesos[tipoPago]--;
 			}
-			if(pPagos!=0){
-				//Hay otro nodo con procesos de tipo pago sin atender
-				sendToken(idOtrosNodos[pPagos]);
-				continue;
-
-			}
-			if(numProcesos[tipoAnulacion]>0){
-				//Hay procesos de anulaciones en el y nodo se atienden
+			else if(numProcesos[tipoAnulacion]>0){
 				proceso p;
 				p.idNodo = idNodo;
-				while(lista[tipoAnulacion]!=NULL){
-					p.pid = lista[tipoAnulacion]->pid;
-					p.type = lista[tipoAnulacion]->pid;
-					while(dentro==1);
-					sem_wait(&semaforoExclusionMutuaDentro);
-					dentro = 1;
-					sem_post(&semaforoExclusionMutuaDentro);
-					status = msgsnd(msqidNodo, &p, sizeof(proceso), 0);
-					if(status == -1){
-						printf("Nodo %i: Error l enviar mensaje para permitir entrar en la SC al proceso %i\n", idNodo, lista[tipoAnulacion]->pid);
-						exit(0);
-					}		
-					lista[tipoAnulacion] = lista[tipoAnulacion]->siguiente;
-					numProcesos[tipoAnulacion]--;
+				p.pid = lista[tipoAnulacion]->pid;
+				p.type = lista[tipoAnulacion]->pid;
+				while(dentro==1);
+				sem_wait(&semaforoExclusionMutuaDentro);
+				dentro = 1;
+				sem_post(&semaforoExclusionMutuaDentro);
+				status = msgsnd(msqidNodo, &p, sizeof(proceso), 0);
+				if(status == -1){
+					printf("Nodo %i: Error al enviar mensaje a proceso %i\n", idNodo, lista[tipoAnulacion]->pid);
+					exit(0);
 				}
+				lista[tipoAnulacion] = lista[tipoAnulacion]->siguiente;
+				numProcesos[tipoAnulacion]--;
 			}
-			if(pAnulaciones!=0){
-				//Hay procesos de anulaciones en otros nodos
-				sendToken(idOtrosNodos[pReservas]);
-				continue;
-			}
-			if(numProcesos[tipoReserva]>0){
-				//Hay procesos de reservas en el nodo y se atienten
+			else if(numProcesos[tipoReserva]>0){
 				proceso p;
 				p.idNodo = idNodo;
-				while(lista[tipoReserva]!=NULL){
-					p.pid = lista[tipoReserva]->pid;
-					p.type = lista[tipoReserva]->pid;
-					while(dentro==1);
-					sem_wait(&semaforoExclusionMutuaDentro);
-					dentro = 1;
-					sem_wait(&semaforoExclusionMutuaDentro);
-					status = msgsnd(msqidNodo, &p, sizeof(proceso), 0);
-					if(status == -1){
-						printf("Nodo %i: Error l enviar mensaje para permitir entrar en la SC al proceso %i\n", idNodo, lista[tipoReserva]->pid);
-						exit(0);
-					}
+				p.pid = lista[tipoReserva]->pid;
+				p.type = lista[tipoReserva]->pid;
+				while(dentro==1);
+				sem_wait(&semaforoExclusionMutuaDentro);
+				dentro = 1;
+				sem_post(&semaforoExclusionMutuaDentro);
+				status = msgsnd(msqidNodo, &p, sizeof(proceso), 0);
+				if(status == -1){
+					printf("Nodo %i: Error al enviar mensaje a proceso %i\n", idNodo, lista[tipoAnulacion]->pid);
+					exit(0);
 				}
+				lista[tipoReserva] = lista[tipoReserva]->siguiente;
+				numProcesos[tipoReserva]--;
 			}
-			if(pReservas!=0){
-				//Hay procesos de reservas en otros nodos
-				sendToken(idOtrosNodos[pReservas]);
-				continue;
-			}
-			if(pGradasEventos!=0){
-				sendToken(idOtrosNodos[pGradasEventos]);
-				continue;
+			else if(numProcesos[tipoGradaEvento]>0){
+				proceso p;
+				p.idNodo = idNodo;
+				p.pid = lista[tipoGradaEvento]->pid;
+				p.type = lista[tipoGradaEvento]->pid;
+				while(dentro==1);
+				sem_wait(&semaforoExclusionMutuaDentro);
+				dentro = 1;
+				sem_post(&semaforoExclusionMutuaDentro);
+				status = msgsnd(msqidNodo, &p, sizeof(proceso), 0);
+				if(status == -1){
+					printf("Nodo %i: Error al enviar mensaje a proceso %i\n", idNodo, lista[tipoGradaEvento]->pid);
+					exit(0);
+				}
+				lista[tipoGradaEvento] = lista[tipoGradaEvento]->siguiente;
+				numProcesos[tipoGradaEvento]--;
+				leyendo[idNodo]++;
 			}
 		}
 		sem_post(&semaforoExclusionMutua);

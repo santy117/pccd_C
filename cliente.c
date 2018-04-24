@@ -56,6 +56,7 @@ int main(int argc, char* argv[]){
 				}
 				else if(pid == 0){
 					evento();
+					return 0;
 				}
 			}
 			for(i=0; i<200; i++){
@@ -66,6 +67,7 @@ int main(int argc, char* argv[]){
 				}
 				else if(pid == 0){
 					grada();
+					return 0;
 				}
 			}
 			break;
@@ -79,6 +81,7 @@ int main(int argc, char* argv[]){
 				}
 				else if(pid == 0){
 					pago();
+					return 0;
 				}
 			}
 			for(i=0; i<200; i++){
