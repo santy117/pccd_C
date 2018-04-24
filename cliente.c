@@ -2,10 +2,12 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <time.h>
 #include <sys/types.h>
 #include <sys/msg.h>
 #include <sys/ipc.h>
 #include <sys/wait.h>
+#include <sys/time.h>
 
 typedef struct{
 	long type;
@@ -33,6 +35,7 @@ void evento(void);
 void grada(void);
 void entradaSC(int);
 void salidaSC(int);
+long long int getTimestamp(void);
 
 int main(int argc, char* argv[]){
 	int prueba = atoi(argv[1]);
@@ -47,28 +50,33 @@ int main(int argc, char* argv[]){
 	int pid, i;
 	switch(prueba){
 		case 1:
-			printf("Prueba 1: 100 procesos de eventos y 200 de gradas en un nodo\n");
-			for(i=0; i<100; i++){
+			printf("Prueba 1: 10 procesos de eventos y 20 de gradas en un nodo\n");
+			for(i=0; i<3; i++){
 				pid = fork();
 				if(pid == -1){
 					printf("Error al crear proceso hijo");
 					exit(0);
 				}
 				else if(pid == 0){
+					usleep(100000);
 					evento();
 					return 0;
 				}
 			}
-			for(i=0; i<200; i++){
+			for(i=0; i<4; i++){
 				pid = fork();
 				if(pid == -1){
 					printf("Error al crear proceso hijo");
 					exit(0);
 				}
 				else if(pid == 0){
+					usleep(100000);
 					grada();
 					return 0;
 				}
+			}
+			for(i=0; i<7; i++){
+				wait(&pid);
 			}
 			break;
 		case 2:
@@ -89,9 +97,60 @@ int main(int argc, char* argv[]){
 			}
 			break;
 		case 3:
+			pid = fork();
+			if(pid==0){
+				usleep(1000);
+				reserva();
+				return 0;
+			}
+			pid = fork();
+			if(pid ==0){
+				usleep(1000);
+				anulacion();
+				return 0;
+			}
+			pid = fork();
+			if(pid==0){
+				usleep(990);
+				pago();
+				return 0;
+			}
+			wait(&pid);
+			wait(&pid);
+			wait(&pid);
+
 			printf("\n");
 			break;
 		case 4:
+			pid = fork();
+			if(pid==0){
+				usleep(1000);
+				grada();
+				return 0;
+			}
+			pid = fork();
+			if(pid ==0){
+				usleep(1000);
+				evento();
+				return 0;
+			}
+			pid = fork();
+			if(pid==0){
+				usleep(50000);
+				pago();
+				return 0;
+			}
+			pid = fork();
+			if(pid==0){
+				usleep(50000);
+				grada();
+				return 0;
+			}
+			wait(&pid);
+			wait(&pid);
+			wait(&pid);
+			wait(&pid);
+
 			printf("\n");
 			break;
 		case 5:
@@ -122,48 +181,53 @@ int main(int argc, char* argv[]){
 
 void pago(){
 	printf("PAGO %i: Creado proceso\n", getpid());
-	printf("PAGO %i: Intentando entrar en la SC\n", getpid());
+	printf("PAGO %i: Permiso para SC\t%lld\n", getpid(), getTimestamp());
 	entradaSC(tipoPago);
-	printf("PAGO %i: Dentro de la SC\n", getpid());
+	printf("PAGO %i: Dentro de la SC\t%lld\n", getpid(), getTimestamp());
+	usleep(1);
 	salidaSC(tipoPago);
-	printf("PAGO %i: Fuera de la SC\n", getpid());
+	printf("PAGO %i: Fuera de la SC\t%lld\n", getpid(), getTimestamp());
 }
 
 void anulacion(){
 	printf("ANULACION %i: Creado proceso\n", getpid());
-	printf("ANULACION %i: Intentando entrar en la SC\n", getpid());
+	printf("ANULACION %i: Permiso para SC\t%lld\n", getpid(), getTimestamp());
 	entradaSC(tipoAnulacion);
-	printf("ANULACION %i: Dentro de la SC\n", getpid());
+	printf("ANULACION %i: Dentro de la SC\t%lld\n", getpid(), getTimestamp());
+	usleep(1);
 	salidaSC(tipoAnulacion);
-	printf("ANULACION %i: Fuera de la SC\n", getpid());
+	printf("ANULACION %i: Fuera de la SC\t%lld\n", getpid(), getTimestamp());
 }
 
 void reserva(){
 	printf("RESERVA %i: Creado proceso\n", getpid());
-	printf("RESERVA %i: Intentando entrar en la SC\n", getpid());
+	printf("RESERVA %i: Permiso para SC\t%lld\n", getpid(), getTimestamp());
 	entradaSC(tipoReserva);
-	printf("RESERVA %i: Dentro de la SC\n", getpid());
+	printf("RESERVA %i: Dentro de la SC\t%lld\n", getpid(), getTimestamp());
+	usleep(1);
 	salidaSC(tipoReserva);
-	printf("RESERVA %i: Fuera de la SC\n", getpid());
+	printf("RESERVA %i: Fuera de la SC\t%lld\n", getpid(), getTimestamp());
 
 }
 
 void evento(){
 	printf("EVENTO %i: Creado proceso\n", getpid());
-	printf("EVENTO %i: Intentando entrar en la SC\n", getpid());
+	printf("EVENTO %i: Permiso para SC\t%lld\n", getpid(), getTimestamp());
 	entradaSC(tipoGradaEvento);
-	printf("EVENTO %i: Dentro de la SC\n", getpid());
+	printf("EVENTO %i: Dentro de la SC\t%lld\n", getpid(), getTimestamp());
+	sleep(1);
 	salidaSC(tipoGradaEvento);
-	printf("EVENTO %i; Fuera de la SC\n", getpid());
+	printf("EVENTO %i; Fuera de la SC\t%lld\n", getpid(), getTimestamp());
 }
 
 void grada(){
 	printf("GRADA %i: Creado procesoo\n", getpid());
-	printf("GRADA %i: Intentando entrar en la SC\n", getpid());
+	printf("GRADA %i: Permiso para SC\t%lld\n", getpid(), getTimestamp());
 	entradaSC(tipoGradaEvento);
-	printf("GRADA %i: Dentro de la SC\n", getpid());
+	printf("GRADA %i: Dentro de la SC\t%lld\n", getpid(), getTimestamp());
+	usleep(5000);
 	salidaSC(tipoGradaEvento);
-	printf("GRADA %i: Fuera de la SC\n", getpid());
+	printf("GRADA %i: Fuera de la SC\t%lld\n", getpid(), getTimestamp());
 }
 
 //Si se solicita la entrada a la SC se enviará un mensaje de tipo 1
@@ -199,4 +263,15 @@ void salidaSC(int tipoProceso){
 		printf("Error al enviar mensaje salida proceso %i\n", getpid());
 		exit(0);
 	}
+}
+
+long long int getTimestamp(){
+	struct timeval timer_usec; 
+  	long long int timestamp_usec;
+	if (!gettimeofday(&timer_usec, NULL)) {
+    	timestamp_usec = ((long long int) timer_usec.tv_sec) * 1000000ll + (long long int) timer_usec.tv_usec;
+  	}
+  	else {
+    	timestamp_usec = -1;
+  	}
 }
