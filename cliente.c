@@ -81,8 +81,8 @@ int main(int argc, char* argv[]){
 			}
 			break;
 		case 2:
-			printf("Prueba 2: 200 prrocesos de pagos\n");
-			for(i=0; i<200; i++){
+			printf("Prueba 2: 100 procesos de pagos\n");
+			for(i=0; i<100; i++){
 				pid = fork();
 				if(pid == -1){
 					printf("Error al crear proceso hijo");
@@ -93,88 +93,87 @@ int main(int argc, char* argv[]){
 					return 0;
 				}
 			}
-			for(i=0; i<200; i++){
+			for(i=0; i<100; i++){
 				wait(&pid);
 			}
 			break;
 		case 3:
-			pid = fork();
-			if(pid==0){
-				usleep(1000);
-				reserva();
-				return 0;
+			printf("Prueba 3: 100 procesos de reservas\n");
+			for(i=0; i<100; i++){
+				pid = fork();
+				if(pid==0){
+					usleep(1000);
+					reserva();
+					return 0;
+				}
 			}
-			pid = fork();
-			if(pid ==0){
-				usleep(1000);
-				anulacion();
-				return 0;
+			// pid = fork();
+			// if(pid ==0){
+			// 	usleep(1000);
+			// 	anulacion();
+			// 	return 0;
+			// }
+			// pid = fork();
+			// if(pid==0){
+			// 	usleep(990);
+			// 	pago();
+			// 	return 0;
+			// }
+			for (i=0;i<100;i++){
+				wait(&pid);
 			}
-			pid = fork();
-			if(pid==0){
-				usleep(990);
-				pago();
-				return 0;
-			}
-			wait(&pid);
-			wait(&pid);
-			wait(&pid);
 
 			printf("\n");
 			break;
 		case 4:
-			pid = fork();
-			if(pid==0){
-				usleep(1000);
-				grada();
-				return 0;
+		printf("Prueba 4: 100 procesos de anulaciones\n");
+			for(i=0; i<100; i++){
+				pid = fork();
+				if(pid==0){
+					usleep(1000);
+					anulacion();
+					return 0;
+				}
 			}
-			pid = fork();
-			if(pid ==0){
-				usleep(1000);
-				evento();
-				return 0;
+			
+			for (i=0;i<100;i++){
+				wait(&pid);
 			}
-			pid = fork();
-			if(pid==0){
-				pago();
-				return 0;
-			}
-			pid = fork();
-			if(pid==0){
-				usleep(50000);
-				grada();
-				return 0;
-			}
-			wait(&pid);
-			wait(&pid);
-			wait(&pid);
-			wait(&pid);
 
 			printf("\n");
 			break;
 		case 5:
-		pid = fork();
-			if(pid==0){
-				usleep(1000);
-				gradaLargo();
-				return 0;
+		printf("Prueba 5: 100 procesos de pagos, 100 de anulaciones y 100 de reservas\n");
+			for(i=0; i<100; i++){
+				pid = fork();
+				if(pid==0){
+					usleep(1000);
+					pago();
+					return 0;
+				}
 			}
-			pid = fork();
-			if(pid ==0){
-				usleep(1000);
-				gradaLargo();
-				return 0;
+			for(i=0; i<100; i++){
+				pid = fork();
+				if(pid==0){
+					usleep(1000);
+					anulacion();
+					return 0;
+				}
 			}
-			pid = fork();
-			if(pid ==0){
-				usleep(1000);
-				gradaLargo();
-				return 0;
+			for(i=0; i<100; i++){
+				pid = fork();
+				if(pid==0){
+					usleep(1000);
+					reserva();
+					return 0;
+				}
 			}
-			wait(&pid);
-			wait(&pid);
-			wait(&pid);
+			for (i=0;i<300;i++){
+				wait(&pid);
+			}
+
+
+
 			printf("\n");
 			break;
 		case 6:
