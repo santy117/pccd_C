@@ -161,7 +161,8 @@ int main(int argc, char* argv[]){
 		}
 		sem_wait(&semaforoExclusionMutua);
 		printf("Nodo %i [%lld]: Petición de nodo %i de testigo Prioridad=%i\n", idNodo, getTimestamp(), request.idNodoEmisor, request.prioridad);
-		prioridades[request.idNodoEmisor] = request.prioridad;
+		if(request.prioridad > prioridades[request.prioridad])
+			prioridades[request.idNodoEmisor] = request.prioridad;
 		atendidas[request.idNodoEmisor] = request.num;
 		if(token == 1 && dentro == 0)
 			asignToken();
@@ -172,6 +173,8 @@ int main(int argc, char* argv[]){
 }
 
 void requestToken(){
+	if(token==1)
+		return;
 	reqTestigo request;
 	int i = 0, status;
 	request.idNodoEmisor = idNodo;
@@ -261,16 +264,18 @@ void asignToken(){
 			myPrio = tipoPago;
 	}
 	else{
-		int otro = 0;
-		for(int i=0; i<numMaxNodos+1; i++){
-			if(prioridades[i]==tipoPago && i!= idNodo){
-				otro = i;
+		if(leyendo[idNodo] == 0){
+			int otro = 0;
+			for(int i=0; i<numMaxNodos+1; i++){
+				if(prioridades[i]==tipoPago && i!= idNodo){
+					otro = i;
+				}
 			}
-		}
-		if(otro != 0){
-			printf("Nodo %i [%lld]: Nodo %i tiene mayor prioridad\n", idNodo, getTimestamp(), otro);
-			sendToken(otro);
-			return;
+			if(otro != 0){
+				printf("Nodo %i [%lld]: Nodo %i tiene mayor prioridad\n", idNodo, getTimestamp(), otro);
+				sendToken(otro);
+				return;
+			}
 		}
 	}
 
@@ -298,16 +303,19 @@ void asignToken(){
 			myPrio =tipoAnulacion;
 	}
 	else{
-		int otro = 0;
-		for(int i=0; i<numMaxNodos+1; i++){
-			if(prioridades[i]==tipoAnulacion && i!= idNodo){
-				otro = i;
+		if(leyendo[idNodo] == 0){	
+			int otro = 0;
+			for(int i=0; i<numMaxNodos+1; i++){
+				if(prioridades[i]==tipoAnulacion && i!= idNodo){
+					otro = i;
+				}
 			}
-		}
-		if(otro != 0){
-			printf("Nodo %i [%lld]: Nodo %i tiene mayor prioridad\n", idNodo, getTimestamp(), otro);
-			sendToken(otro);
-			return;
+			
+			if(otro != 0){
+				printf("Nodo %i [%lld]: Nodo %i tiene mayor prioridad\n", idNodo, getTimestamp(), otro);
+				sendToken(otro);
+				return;
+			}
 		}
 	}
 
@@ -335,16 +343,18 @@ void asignToken(){
 			myPrio = tipoReserva;
 	}
 	else{
-		int otro = 0;
-		for(int i=0; i<numMaxNodos+1; i++){
-			if(prioridades[i]==tipoReserva && i!= idNodo){
-				otro = i;
+		if(leyendo[idNodo] == 0){
+			int otro = 0;
+			for(int i=0; i<numMaxNodos+1; i++){
+				if(prioridades[i]==tipoReserva && i!= idNodo){
+					otro = i;
+				}
 			}
-		}
-		if(otro != 0){
-			printf("Nodo %i [%lld]: Nodo %i tiene mayor prioridad\n", idNodo, getTimestamp(), otro);
-			sendToken(otro);
-			return;
+			if(otro != 0){
+				printf("Nodo %i [%lld]: Nodo %i tiene mayor prioridad\n", idNodo, getTimestamp(), otro);
+				sendToken(otro);
+				return;
+			}
 		}
 	}
 
@@ -356,6 +366,14 @@ void asignToken(){
 			printf("A\n");
 			return;
 		}
+		status = 0;
+		for(i=0; i<numMaxNodos+1; i++){
+			if(prioridades[i]>tipoGradaEvento){
+				status = 1;
+			}
+		}
+		if(status == 1)
+			return;
 		lectores = 0;
 		for(i=0; i<numMaxNodos+1; i++){
 			lectores += leyendo[i];
@@ -389,6 +407,8 @@ void asignToken(){
 		}
 	}
 	else{
+		if(dentro == 1)
+			return;
 		int otro = 0;
 		for(int i=0; i<numMaxNodos+1; i++){
 			if(prioridades[i]==tipoGradaEvento && i!= idNodo){
@@ -431,6 +451,14 @@ void *receptorNodo(){
 					leyendoBool = 0;
 				}
 			}
+			if(numProcesos[tipoPago]==0)
+				myPrio = tipoAnulacion;
+			if(numProcesos[tipoAnulacion]==0)
+				myPrio = tipoReserva;
+			if(numProcesos[tipoReserva]==0)
+				myPrio = tipoGradaEvento;
+			if(numProcesos[tipoGradaEvento]==0)
+				myPrio = 0;
 			asignToken();
 		}
 		else if(p.type == 1){
@@ -504,15 +532,29 @@ void *receptorInterNodo(){
 		for(status = 1; status < numMaxNodos+1; status++){
 			printf("LEYENDO NODO %i -> %i\n", status, leyendo[status]);
 		}
-		int aux = 0;
+		int aux = 0, nodo = 0;
 		for(status=0; status < numMaxNodos+1; status++){
-			aux += leyendo[idNodo];
+			aux += leyendo[status];
+			if(leyendo[status]!= 0){
+				printf("%i\n", status);
+				nodo = status;
+			}
 		}
 		if(aux != 0)
 			leyendoBool = 1;
+
+		printf("Lectores en nodo %i\n", leyendo[idNodo]);
+		printf("LeyendoBool %i\n", leyendoBool);
 		if(leyendo[idNodo]==0){
-			asignToken();
-			sem_post(&semaforoExclusionMutua);
+			if(leyendoBool == 1){
+				sendToken(nodo);
+				requestToken();
+				sem_post(&semaforoExclusionMutua);
+			}
+			else{
+				asignToken();
+				sem_post(&semaforoExclusionMutua);
+			}
 		}
 		else{
 			sem_post(&semaforoExclusionMutua);
