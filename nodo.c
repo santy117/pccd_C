@@ -67,7 +67,6 @@ int msqidNodo;
 int msqidInterNodoTestigo;
 int msqidInterNodoRequest;
 int idOtrosNodos[numMaxNodos+1] = {0, 1, 2, 3, 4};
-int peticiones[numMaxNodos+1] = {0, 0, 0, 0, 0};
 int atendidas[numMaxNodos+1] = {0, 0, 0, 0, 0};
 int leyendo[numMaxNodos+1] = {0, 0, 0, 0, 0};
 int prioridades[numMaxNodos+1] = {0, 0, 0, 0, 0};
@@ -151,7 +150,6 @@ int main(int argc, char* argv[]){
 	while(1){
 		printf("Nodo %i [%lld]: Testigo=%i\n", idNodo, getTimestamp(), token);
 		printf("Nodo %i [%lld]: Prioridad=%i\n", idNodo, getTimestamp(), myPrio);
-		while(token==0);
 		reqTestigo request;
 		status = msgrcv(msqidInterNodoRequest, &request, sizeof(reqTestigo), idNodo, 0);
 		if(status == -1){
@@ -197,8 +195,9 @@ void requestToken(){
 	}
 	else{
 		request.prioridad = 0;
+		return;
 	}
-	for(i=0; i<numMaxNodos; i++){
+	for(i=0; i<numMaxNodos+1; i++){
 		if(idOtrosNodos[i]==idNodo){
 			continue;
 		}
@@ -231,6 +230,7 @@ void sendToken(int idNodoReceptor){
 		printf("Nodo %i: Error al enviar testigo\n", idNodo);
 		exit(0);
 	}
+	myPrio = 0;
 	if(numProcesos[tipoPago]>0||numProcesos[tipoAnulacion]>0||numProcesos[tipoReserva]>0||numProcesos[tipoGradaEvento]>0)
 		requestToken();
 }
@@ -262,6 +262,7 @@ void asignToken(){
 			lista[tipoPago] = (Lista *)malloc(sizeof(Lista));
 		else
 			myPrio = tipoPago;
+		return;
 	}
 	else{
 		if(leyendo[idNodo] == 0){
@@ -301,6 +302,7 @@ void asignToken(){
 			lista[tipoAnulacion] = (Lista *)malloc(sizeof(Lista));
 		else
 			myPrio =tipoAnulacion;
+		return;
 	}
 	else{
 		if(leyendo[idNodo] == 0){	
@@ -341,6 +343,7 @@ void asignToken(){
 			lista[tipoReserva] = (Lista *)malloc(sizeof(Lista));
 		else 
 			myPrio = tipoReserva;
+		return;
 	}
 	else{
 		if(leyendo[idNodo] == 0){
@@ -363,7 +366,6 @@ void asignToken(){
 			return;
 		if(numProcesos[tipoPago]>0 || numProcesos[tipoAnulacion]>0 || numProcesos[tipoReserva]>0){
 			//Esto significa que hay otro proceso más prioritario en el nodo por lo que no se atenderan otro lector
-			printf("A\n");
 			return;
 		}
 		status = 0;
@@ -378,7 +380,7 @@ void asignToken(){
 		for(i=0; i<numMaxNodos+1; i++){
 			lectores += leyendo[i];
 		}
-		if(lectores>=lectoresSC){
+		if(lectores>lectoresSC){
 			//Esto significa que tenemos N lectores concurrentes y no podemos tener más
 			printf("Nodo %i [%lld]: Hay N lectores en SC\n", idNodo, getTimestamp());
 			return;
@@ -557,6 +559,7 @@ void *receptorInterNodo(){
 			}
 		}
 		else{
+			asignToken();
 			sem_post(&semaforoExclusionMutua);
 		}
 	}
