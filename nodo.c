@@ -159,7 +159,7 @@ int main(int argc, char* argv[]){
 		}
 		sem_wait(&semaforoExclusionMutua);
 		printf("Nodo %i [%lld]: Petición de nodo %i de testigo Prioridad=%i\n", idNodo, getTimestamp(), request.idNodoEmisor, request.prioridad);
-		if(request.prioridad > prioridades[request.prioridad])
+		if(request.num >= atendidas[request.idNodoEmisor])
 			prioridades[request.idNodoEmisor] = request.prioridad;
 		atendidas[request.idNodoEmisor] = request.num;
 		if(token == 1 && dentro == 0)
@@ -189,13 +189,14 @@ void requestToken(){
 		request.prioridad = tipoReserva;
 		myPrio = tipoReserva;
 	}
-	else if(numProcesos[tipoGradaEvento]>0){
+	else if(numProcesos[tipoGradaEvento]>0 || leyendo[idNodo]>0){
 		request.prioridad = tipoGradaEvento;
 		myPrio = tipoGradaEvento;
 	}
 	else{
+		//No hay procesos en el nodo, no es necesario pedir el token
 		request.prioridad = 0;
-		return;
+		myPrio = 0;
 	}
 	for(i=0; i<numMaxNodos+1; i++){
 		if(idOtrosNodos[i]==idNodo){
@@ -230,9 +231,17 @@ void sendToken(int idNodoReceptor){
 		printf("Nodo %i: Error al enviar testigo\n", idNodo);
 		exit(0);
 	}
-	myPrio = 0;
-	if(numProcesos[tipoPago]>0||numProcesos[tipoAnulacion]>0||numProcesos[tipoReserva]>0||numProcesos[tipoGradaEvento]>0)
-		requestToken();
+	if(numProcesos[tipoPago]>0)
+		myPrio = tipoPago;
+	else if(numProcesos[tipoAnulacion]>0)
+		myPrio = tipoAnulacion;
+	else if(numProcesos[tipoReserva]>0)
+		myPrio = tipoReserva;
+	else if(numProcesos[tipoGradaEvento]>0)
+		myPrio = tipoGradaEvento;
+	else
+		myPrio = 0;
+	requestToken();
 }
 
 void asignToken(){
@@ -265,166 +274,102 @@ void asignToken(){
 		return;
 	}
 	else{
-		if(leyendo[idNodo] == 0){
-			int otro = 0;
-			for(int i=0; i<numMaxNodos+1; i++){
-				if(prioridades[i]==tipoPago && i!= idNodo){
-					otro = i;
-				}
-			}
-			if(otro != 0){
-				printf("Nodo %i [%lld]: Nodo %i tiene mayor prioridad\n", idNodo, getTimestamp(), otro);
-				sendToken(otro);
-				return;
-			}
-		}
-	}
-
-	if(numProcesos[tipoAnulacion]>0){
-		if(leyendoBool==1){
-			return;
-		}
-		printf("Nodo %i [%lld]: Enviando permiso SC a proceso %i\n", idNodo, getTimestamp(),lista[tipoAnulacion]->pid);
-		proceso p;
-		p.type = lista[tipoAnulacion]->pid;
-		p.pid = lista[tipoAnulacion]->pid;
-		status = msgsnd(msqidNodo, &p, sizeof(proceso), 0);
-		if(status == -1){
-			printf("Nodo %i: Error al enviar mensaje a proceso %i\n", idNodo, lista[tipoAnulacion]->pid);
-			exit(0);
-		}
-		dentro = 1;
-		Lista *aux = lista[tipoAnulacion];
-		lista[tipoAnulacion] = lista[tipoAnulacion]->siguiente;
-		free(aux);
-		numProcesos[tipoAnulacion]--;
-		if(numProcesos[tipoAnulacion]==0)
-			lista[tipoAnulacion] = (Lista *)malloc(sizeof(Lista));
-		else
-			myPrio =tipoAnulacion;
-		return;
-	}
-	else{
-		if(leyendo[idNodo] == 0){	
-			int otro = 0;
-			for(int i=0; i<numMaxNodos+1; i++){
-				if(prioridades[i]==tipoAnulacion && i!= idNodo){
-					otro = i;
-				}
-			}
-			
-			if(otro != 0){
-				printf("Nodo %i [%lld]: Nodo %i tiene mayor prioridad\n", idNodo, getTimestamp(), otro);
-				sendToken(otro);
-				return;
-			}
-		}
-	}
-
-	if(numProcesos[tipoReserva]>0){
-		if(leyendoBool==1){
-			return;
-		}
-		printf("Nodo %i [%lld]: Enviando permiso SC a proceso %i\n", idNodo, getTimestamp(), lista[tipoReserva]->pid);
-		proceso p;
-		p.type = lista[tipoReserva]->pid;
-		p.pid = lista[tipoReserva]->pid;
-		status = msgsnd(msqidNodo, &p, sizeof(proceso), 0);
-		if(status == -1){
-			printf("Nodo %i: Error al enviar mensaje al proceso %i\n", idNodo, lista[tipoReserva]->pid);
-			exit(0);
-		}
-		dentro = 1;
-		Lista *aux = lista[tipoReserva];
-		lista[tipoReserva] = lista[tipoReserva]->siguiente;
-		free(aux);
-		numProcesos[tipoReserva]--;
-		if(numProcesos[tipoReserva]==0)
-			lista[tipoReserva] = (Lista *)malloc(sizeof(Lista));
-		else 
-			myPrio = tipoReserva;
-		return;
-	}
-	else{
-		if(leyendo[idNodo] == 0){
-			int otro = 0;
-			for(int i=0; i<numMaxNodos+1; i++){
-				if(prioridades[i]==tipoReserva && i!= idNodo){
-					otro = i;
-				}
-			}
-			if(otro != 0){
-				printf("Nodo %i [%lld]: Nodo %i tiene mayor prioridad\n", idNodo, getTimestamp(), otro);
-				sendToken(otro);
-				return;
-			}
-		}
-	}
-
-	if(numProcesos[tipoGradaEvento]>0){
-		if(dentro == 1)
-			return;
-		if(numProcesos[tipoPago]>0 || numProcesos[tipoAnulacion]>0 || numProcesos[tipoReserva]>0){
-			//Esto significa que hay otro proceso más prioritario en el nodo por lo que no se atenderan otro lector
-			return;
-		}
-		status = 0;
+		int prioOtro = 0, otroNodo = 0, lectores=0;
 		for(i=0; i<numMaxNodos+1; i++){
-			if(prioridades[i]>tipoGradaEvento){
-				status = 1;
+			if(prioridades[i]>prioOtro && i != idNodo){
+				prioOtro = prioridades[i];
+				otroNodo = idOtrosNodos[i];
 			}
-		}
-		if(status == 1)
-			return;
-		lectores = 0;
-		for(i=0; i<numMaxNodos+1; i++){
 			lectores += leyendo[i];
 		}
-		if(lectores>lectoresSC){
-			//Esto significa que tenemos N lectores concurrentes y no podemos tener más
-			printf("Nodo %i [%lld]: Hay N lectores en SC\n", idNodo, getTimestamp());
-			return;
+		printf("%i %i %i %i\n", numProcesos[tipoPago], numProcesos[tipoAnulacion], numProcesos[tipoReserva], numProcesos[tipoGradaEvento]);
+		if(prioOtro == tipoPago && leyendo[idNodo]==0){
+				printf("Nodo %i [%lld]: Nodo %i tiene mayor prioridad\n", idNodo, getTimestamp(), otroNodo);
+				sendToken(otroNodo);
 		}
-		printf("Nodo %i [%lld]: Lectores SC %i\n", idNodo, getTimestamp(), lectores);
-		printf("Nodo %i [%lld]: Enviando permiso SC a proceso %i\n", idNodo, getTimestamp(),lista[tipoGradaEvento]->pid);
-		proceso p;
-		p.type = lista[tipoGradaEvento]->pid;
-		p.pid = lista[tipoGradaEvento]->pid;
-		status = msgsnd(msqidNodo, &p, sizeof(proceso), 0);
-		if(status == -1){
-			printf("Nodo %i: Error al enviar mensaje al proceso %i\n", idNodo, lista[tipoGradaEvento]->pid);
-			exit(0);
+		else if(numProcesos[tipoAnulacion]>0 && leyendoBool == 0){
+			printf("Nodo %i [%lld]: Enviando permiso SC a proceso %i\n", idNodo, getTimestamp(),lista[tipoAnulacion]->pid);
+			proceso p;
+			p.type = lista[tipoAnulacion]->pid;
+			p.pid = lista[tipoAnulacion]->pid;
+			status = msgsnd(msqidNodo, &p, sizeof(proceso), 0);
+			if(status == -1){
+				printf("Nodo %i: Error al enviar mensaje a proceso %i\n", idNodo, lista[tipoAnulacion]->pid);
+				exit(0);
+			}
+			dentro = 1;
+			Lista *aux = lista[tipoAnulacion];
+			lista[tipoAnulacion] = lista[tipoAnulacion]->siguiente;
+			free(aux);
+			numProcesos[tipoAnulacion]--;
+			if(numProcesos[tipoAnulacion]==0)
+				lista[tipoAnulacion] = (Lista *)malloc(sizeof(Lista));
+			else
+				myPrio =tipoAnulacion;
 		}
-		//Lista *aux = lista[tipoReserva];
-		lista[tipoGradaEvento] = lista[tipoGradaEvento]->siguiente;
-		//free(aux);
-		leyendoBool = 1;
-		leyendo[idNodo]++;
-		numProcesos[tipoGradaEvento]--;
-		if(numProcesos[tipoGradaEvento]==0)
-			lista[tipoGradaEvento] = (Lista *)malloc(sizeof(Lista));
-		else{
-			myPrio = tipoGradaEvento;
-			asignToken();
+		else if(prioOtro == tipoAnulacion && leyendo[idNodo] == 0){
+			printf("Nodo %i [%lld]: Nodo %i tiene mayor prioridad\n", idNodo, getTimestamp(), otroNodo);
+			sendToken(otroNodo);
 		}
-	}
-	else{
-		if(dentro == 1)
-			return;
-		int otro = 0;
-		for(int i=0; i<numMaxNodos+1; i++){
-			if(prioridades[i]==tipoGradaEvento && i!= idNodo){
-				otro = i;
+		else if(numProcesos[tipoReserva]>0 && leyendoBool == 0){
+			printf("Nodo %i [%lld]: Enviando permiso SC a proceso %i\n", idNodo, getTimestamp(), lista[tipoReserva]->pid);
+			proceso p;
+			p.type = lista[tipoReserva]->pid;
+			p.pid = lista[tipoReserva]->pid;
+			status = msgsnd(msqidNodo, &p, sizeof(proceso), 0);
+			if(status == -1){
+				printf("Nodo %i: Error al enviar mensaje al proceso %i\n", idNodo, lista[tipoReserva]->pid);
+				exit(0);
+			}
+			dentro = 1;
+			Lista *aux = lista[tipoReserva];
+			lista[tipoReserva] = lista[tipoReserva]->siguiente;
+			free(aux);
+			numProcesos[tipoReserva]--;
+			if(numProcesos[tipoReserva]==0)
+				lista[tipoReserva] = (Lista *)malloc(sizeof(Lista));
+			else 
+				myPrio = tipoReserva;
+		}
+		else if(prioOtro == tipoReserva && leyendo[idNodo] == 0){
+			printf("Nodo %i [%lld]: Nodo %i tiene mayor prioridad\n", idNodo, getTimestamp(), otroNodo);
+			sendToken(otroNodo);
+		}
+		else if(numProcesos[tipoGradaEvento]>0 && numProcesos[tipoPago] == 0 && lectores < lectoresSC &&numProcesos[tipoAnulacion] == 0 && numProcesos[tipoReserva] == 0 && prioOtro <= tipoGradaEvento){
+			printf("Nodo %i [%lld]: Lectores SC %i\n", idNodo, getTimestamp(), lectores);
+			printf("Nodo %i [%lld]: Enviando permiso SC a proceso %i\n", idNodo, getTimestamp(),lista[tipoGradaEvento]->pid);
+			proceso p;
+			p.type = lista[tipoGradaEvento]->pid;
+			p.pid = lista[tipoGradaEvento]->pid;
+			status = msgsnd(msqidNodo, &p, sizeof(proceso), 0);
+			if(status == -1){
+				printf("Nodo %i: Error al enviar mensaje al proceso %i\n", idNodo, lista[tipoGradaEvento]->pid);
+				exit(0);
+			}
+			//Lista *aux = lista[tipoReserva];
+			lista[tipoGradaEvento] = lista[tipoGradaEvento]->siguiente;
+			//free(aux);
+			leyendoBool = 1;
+			leyendo[idNodo]++;
+			numProcesos[tipoGradaEvento]--;
+			if(numProcesos[tipoGradaEvento]==0)
+				lista[tipoGradaEvento] = (Lista *)malloc(sizeof(Lista));
+			else{
+				myPrio = tipoGradaEvento;
+				asignToken();
 			}
 		}
-		if(otro != 0){
-			printf("Nodo %i [%lld]: Nodo %i tiene lectores esperando\n", idNodo, getTimestamp(), otro);
-			sendToken(otro);
-			return;
+		else {
+			if(prioOtro == 1 ){
+				if(myPrio < tipoReserva){
+					if(lectores < lectoresSC){
+						sendToken(otroNodo);
+					}
+				}
+			}
 		}
-		
-	}
 
+	}
 }
 
 void *receptorNodo(){
@@ -453,13 +398,15 @@ void *receptorNodo(){
 					leyendoBool = 0;
 				}
 			}
-			if(numProcesos[tipoPago]==0)
+			if(numProcesos[tipoPago]>0)
+				myPrio = tipoPago;
+			else if(numProcesos[tipoAnulacion]>0)
 				myPrio = tipoAnulacion;
-			if(numProcesos[tipoAnulacion]==0)
+			else if(numProcesos[tipoReserva]>0)
 				myPrio = tipoReserva;
-			if(numProcesos[tipoReserva]==0)
+			else if(numProcesos[tipoGradaEvento]>0)
 				myPrio = tipoGradaEvento;
-			if(numProcesos[tipoGradaEvento]==0)
+			else
 				myPrio = 0;
 			asignToken();
 		}
@@ -534,21 +481,28 @@ void *receptorInterNodo(){
 		for(status = 1; status < numMaxNodos+1; status++){
 			printf("LEYENDO NODO %i -> %i\n", status, leyendo[status]);
 		}
-		int aux = 0, nodo = 0;
+		printf("VECTOR PRIORIDADES\n");
+		for(status=1; status<numMaxNodos+1; status++){
+			printf("PRIORIDAD NODO %i -> %i\n", status, prioridades[status]);
+		}
+		int aux = 0, nodo = 0, prio = 0;
 		for(status=0; status < numMaxNodos+1; status++){
 			aux += leyendo[status];
 			if(leyendo[status]!= 0){
-				printf("%i\n", status);
 				nodo = status;
 			}
+			if(prioridades[status]>prio)
+				prio = prioridades[status];
 		}
 		if(aux != 0)
 			leyendoBool = 1;
 
 		printf("Lectores en nodo %i\n", leyendo[idNodo]);
 		printf("LeyendoBool %i\n", leyendoBool);
+
 		if(leyendo[idNodo]==0){
-			if(leyendoBool == 1){
+			if(leyendoBool == 1 && prio > tipoGradaEvento){
+				printf("MAnda desde aqui\n");
 				sendToken(nodo);
 				requestToken();
 				sem_post(&semaforoExclusionMutua);

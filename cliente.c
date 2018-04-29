@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <time.h>
+#include <sched.h>
 #include <sys/types.h>
 #include <sys/msg.h>
 #include <sys/ipc.h>
@@ -22,33 +23,155 @@ typedef struct{
 #define tipoReserva 2
 #define tipoGradaEvento 1
 
-//Definición variables
+//Definición ids de los nodos
+#define idNodo1 1
+#define idNodo2 2
+#define idNodo3 3
+#define idNodo4 4
 
-int idNodo = 0;
-int msqid = 0;
+//Definición variables
+int msqid1 = 0;
+int msqid2 = 0;
+int msqid3 = 0;
+int msqid4 = 0;
+
 
 //Definición de cabeceras
-void pago(void);
-void anulacion(void);
-void reserva(void);
-void evento(void);
-void grada(void);
-void entradaSC(int);
-void salidaSC(int);
+void pago(int, int);
+void anulacion(int, int);
+void reserva(int, int);
+void evento(int, int);
+void grada(int, int);
+void entradaSC(int, int, int);
+void salidaSC(int, int, int);
 long long int getTimestamp(void);
-void gradaLargo(void);
 
 int main(int argc, char* argv[]){
-	int prueba = atoi(argv[1]);
-	idNodo = atoi(argv[2]);
-	
 	char* path="/bin/ls";
-	key_t key = ftok(path, idNodo);
-	msqid = msgget(key, IPC_CREAT|0666);
-	if(msqid==-1){
-		printf("Error al crear cola de mensajes\n");
+	key_t key1 = ftok(path, idNodo1);
+	msqid1 = msgget(key1, IPC_CREAT|0666);
+	if(msqid1==-1){
+		printf("Error al crear cola de mensajes del nodo 1\n");
+		exit(0);
 	}
+	key_t key2 = ftok(path, idNodo2);
+	msqid2 = msgget(key2, IPC_CREAT|0666);
+	if(msqid2 == -1){
+		printf("Error al crear cola de mensajes del nodo 2\n");
+		exit(0);
+	}
+	key_t key3 = ftok(path, idNodo3);
+	msqid3 = msgget(key3, IPC_CREAT|0666);
+	if(msqid3 == -1){
+		printf("Error al crear cola de mensajes del nodo 3\n");
+		exit(0);
+	}
+	key_t key4 = ftok(path, idNodo4);
+	msqid4 = msgget(key4, IPC_CREAT|0666);
+	if(msqid4 == -1){
+		printf("Error al crear cola de mensajes del nodo 4\n");
+		exit(0);
+	}
+
+	struct sched_param param;
+	param.sched_priority = 90;
+	sched_setscheduler(getpid(), SCHED_FIFO, &param);
+
 	int pid, i;
+	for(i=0; i<20; i++){
+		pid = fork();
+		if(pid == -1){
+			printf("Error al crear proceso hijo\n");
+			exit(0);
+		}
+		else if(pid == 0){
+			param.sched_priority = 70;
+			sched_setscheduler(getpid(), SCHED_FIFO, &param);
+			reserva(idNodo1, msqid1);
+			return 0;
+		}
+	}
+	for(i=0; i<10; i++){
+		pid = fork();
+		if(pid == -1){
+			printf("Error al crear proceso hijo\n");
+			exit(0);
+		}
+		else if(pid == 0){
+			param.sched_priority = 70;
+			sched_setscheduler(getpid(), SCHED_FIFO, &param);
+			pago(idNodo3, msqid3);
+			return 0;
+		}
+	}
+
+	for(i=0; i<27; i++)
+		wait(&pid);
+	
+	for(i=0; i<15; i++){
+		pid = fork();
+		if(pid == -1){
+			printf("Error al crear proceso hijo\n");
+			exit(0);
+		}
+		else if(pid == 0){
+			param.sched_priority = 70;
+			sched_setscheduler(getpid(), SCHED_FIFO, &param);
+			anulacion(idNodo2, msqid2);
+			return 0;
+		}
+	}
+
+	for(i=0; i<16; i++)
+		wait(&pid);
+
+	for(i=0; i<6; i++){
+		pid = fork();
+		if(pid == -1){
+			printf("Error al crear proceso hijo\n");
+			exit(0);
+		}
+		else if(pid == 0){
+			sched_setscheduler(getpid(), SCHED_FIFO, &param);
+			grada(idNodo4, msqid4);
+			return 0;
+		}
+	}
+
+	for(i=0; i<6; i++){
+		pid = fork();
+		if(pid == -1){
+			printf("Error al crear proceso hijo\n");
+			exit(0);
+		}
+		else if(pid == 0){
+			sched_setscheduler(getpid(), SCHED_FIFO, &param);
+			evento(idNodo1, msqid1);
+			return 0;
+		}
+	}
+
+	for(i=0; i<12; i++)
+		wait(&pid);
+
+	for(i=0; i<10; i++){
+		pid = fork();
+		if(pid == -1){
+			printf("Error al crear proceso hijo\n");
+			exit(0);
+		}
+		else if(pid == 0){
+			sched_setscheduler(getpid(), SCHED_FIFO, &param);
+			anulacion(idNodo1, msqid1);
+			return 0;
+		}
+	}
+
+	for(i=0; i<12; i++)
+		wait(&pid);
+	
+	/*
+
 	switch(prueba){
 		case 1:
 			printf("Prueba 1: 10 procesos de eventos y 20 de gradas en un nodo\n");
@@ -194,85 +317,75 @@ int main(int argc, char* argv[]){
 		default:
 			printf("Prueba no definida\n");
 			
-	}
+	}*/
 	return 0;
 }
 
-void gradaLargo(){
-	printf("GRADA %i\t[%lld]:\tCreado procesoo\n", getpid(), getTimestamp());
-	printf("GRADA %i\t[%lld]:\tIntento acceder a SC\n", getpid(), getTimestamp());
-	entradaSC(tipoGradaEvento);
-	printf("GRADA %i\t[%lld]:\tDentro de la SC\n", getpid(), getTimestamp());
-	sleep(20);
-	salidaSC(tipoGradaEvento);
-	printf("GRADA %i\t[%lld]:\tFuera de la SC\n", getpid(), getTimestamp());
+void pago(int idNodo, int msqidNodo){
+	printf("PAGO %i\t[%lld][Nodo %i]:\tCreado proceso\n", getpid(), getTimestamp(), idNodo);
+	printf("PAGO %i\t[%lld][Nodo %i]:\tIntento acceder a SC\n", getpid(), getTimestamp(), idNodo);
+	entradaSC(tipoPago, idNodo, msqidNodo);
+	printf("PAGO %i\t[%lld][Nodo %i]:\tDentro de la SC\n", getpid(), getTimestamp(), idNodo);
+	sleep(1);
+	salidaSC(tipoPago, idNodo, msqidNodo);
+	printf("PAGO %i\t[%lld][Nodo %i]:\tFuera de la SC\n", getpid(), getTimestamp(), idNodo);
 }
 
-void pago(){
-	printf("PAGO %i\t[%lld]:\tCreado proceso\n", getpid(), getTimestamp());
-	printf("PAGO %i\t[%lld]:\tIntento acceder a SC\n", getpid(), getTimestamp());
-	entradaSC(tipoPago);
-	printf("PAGO %i\t[%lld]:\tDentro de la SC\n", getpid(), getTimestamp());
-	getchar();
-	salidaSC(tipoPago);
-	printf("PAGO %i\t[%lld]:\tFuera de la SC\n", getpid(), getTimestamp());
+void anulacion(int idNodo, int msqidNodo){
+	printf("ANULACION %i\t[%lld][Nodo %i]:\tCreado proceso\n", getpid(), getTimestamp(), idNodo);
+	printf("ANULACION %i\t[%lld][Nodo %i]:\tIntento acceder a SC\n", getpid(), getTimestamp(), idNodo);
+	entradaSC(tipoAnulacion, idNodo, msqidNodo);
+	printf("ANULACION %i\t[%lld][Nodo %i]:\tDentro de la SC\n", getpid(), getTimestamp(), idNodo);
+	sleep(1);
+	salidaSC(tipoAnulacion, idNodo, msqidNodo);
+	printf("ANULACION %i\t[%lld][Nodo %i]:\tFuera de la SC\n", getpid(), getTimestamp(), idNodo);
 }
 
-void anulacion(){
-	printf("ANULACION %i\t[%lld]:\tCreado proceso\n", getpid(), getTimestamp());
-	printf("ANULACION %i\t[%lld]:\tIntento acceder a SC\n", getpid(), getTimestamp());
-	entradaSC(tipoAnulacion);
-	printf("ANULACION %i\t[%lld]:\tDentro de la SC\n", getpid(), getTimestamp());
-	usleep(1);
-	salidaSC(tipoAnulacion);
-	printf("ANULACION %i\t[%lld]:\tFuera de la SC\n", getpid(), getTimestamp());
-}
-
-void reserva(){
-	printf("RESERVA %i\t[%lld]:\tCreado proceso\n", getpid(), getTimestamp());
-	printf("RESERVA %i\t[%lld]:\tIntento acceder a SC\n", getpid(), getTimestamp());
-	entradaSC(tipoReserva);
-	printf("RESERVA %i\t[%lld]:\tDentro de la SC\n", getpid(), getTimestamp());
-	usleep(1);
-	salidaSC(tipoReserva);
-	printf("RESERVA %i\t[%lld]:\tFuera de la SC\n", getpid(), getTimestamp());
+void reserva(int idNodo, int msqidNodo){
+	printf("RESERVA %i\t[%lld][Nodo %i]:\tCreado proceso\n", getpid(), getTimestamp(), idNodo);
+	printf("RESERVA %i\t[%lld][Nodo %i]:\tIntento acceder a SC\n", getpid(), getTimestamp(), idNodo);
+	entradaSC(tipoReserva, idNodo, msqidNodo);
+	printf("RESERVA %i\t[%lld][Nodo %i]:\tDentro de la SC\n", getpid(), getTimestamp(), idNodo);
+	sleep(1);
+	salidaSC(tipoReserva, idNodo, msqidNodo);
+	printf("RESERVA %i\t[%lld][Nodo %i]:\tFuera de la SC\n", getpid(), getTimestamp(), idNodo);
 
 }
 
-void evento(){
-	printf("EVENTO %i\t[%lld]:\tCreado proceso\n", getpid(), getTimestamp());
-	printf("EVENTO %i\t[%lld]:\tIntento acceder a SC\n", getpid(), getTimestamp());
-	entradaSC(tipoGradaEvento);
-	printf("EVENTO %i\t[%lld]:\tDentro de la SC\n", getpid(), getTimestamp());
+void evento(int idNodo, int msqidNodo){
+	printf("EVENTO %i\t[%lld][Nodo %i]:\tCreado proceso\n", getpid(), getTimestamp(), idNodo);
+	printf("EVENTO %i\t[%lld][Nodo %i]:\tIntento acceder a SC\n", getpid(), getTimestamp(), idNodo);
+	entradaSC(tipoGradaEvento, idNodo, msqidNodo);
+	printf("EVENTO %i\t[%lld][Nodo %i]:\tDentro de la SC\n", getpid(), getTimestamp(), idNodo);
 	sleep(5);
-	salidaSC(tipoGradaEvento);
-	printf("EVENTO %i\t[%lld]:\tFuera de la SC\n", getpid(), getTimestamp());
+	salidaSC(tipoGradaEvento, idNodo, msqidNodo);
+	printf("EVENTO %i\t[%lld][Nodo %i]:\tFuera de la SC\n", getpid(), getTimestamp(), idNodo);
 }
 
-void grada(){
-	printf("GRADA %i\t[%lld]:\tCreado procesoo\n", getpid(), getTimestamp());
-	printf("GRADA %i\t[%lld]:\tIntento acceder a SC\n", getpid(), getTimestamp());
-	entradaSC(tipoGradaEvento);
-	printf("GRADA %i\t[%lld]:\tDentro de la SC\n", getpid(), getTimestamp());
-	sleep(15);
-	salidaSC(tipoGradaEvento);
-	printf("GRADA %i\t[%lld]:\tFuera de la SC\n", getpid(), getTimestamp());
+void grada(int idNodo, int msqidNodo){
+	printf("GRADA %i\t[%lld][Nodo %i]:\tCreado procesoo\n", getpid(), getTimestamp(), idNodo);
+	printf("GRADA %i\t[%lld][Nodo %i]:\tIntento acceder a SC\n", getpid(), getTimestamp(), idNodo);
+	entradaSC(tipoGradaEvento, idNodo, msqidNodo);
+	printf("GRADA %i\t[%lld][Nodo %i]:\tDentro de la SC\n", getpid(), getTimestamp(), idNodo);
+	sleep(2);
+	salidaSC(tipoGradaEvento, idNodo, msqidNodo);
+	printf("GRADA %i\t[%lld][Nodo %i]:\tFuera de la SC\n", getpid(), getTimestamp(), idNodo);
 }
 
 //Si se solicita la entrada a la SC se enviará un mensaje de tipo 1
-void entradaSC(int tipoProceso){
+void entradaSC(int tipoProceso, int idNodo, int msqidNodo){
 	proceso p;
 	p.type = 1;
 	p.idNodo = idNodo;
 	p.tipo = tipoProceso;
 	p.pid = getpid();
 
-	int status = msgsnd(msqid, &p, sizeof(proceso), 0);
+	int status = msgsnd(msqidNodo, &p, sizeof(proceso), 0);
 	if(status==-1){
 		printf("Error al enviar mensaje entrada proceso %i\n", getpid());
 		exit(0);
 	}
-	status = msgrcv(msqid, &p, sizeof(proceso), getpid(), 0);
+	status = msgrcv(msqidNodo, &p, sizeof(proceso), getpid(), 0);
 	if(status==-1){
 		printf("Error al recibir mensaje proceso %i\n", getpid());
 		exit(0);
@@ -280,14 +393,14 @@ void entradaSC(int tipoProceso){
 }
 
 //Si se notifica la salida a la SC se envia un mensaje de tipo 2
-void salidaSC(int tipoProceso){
+void salidaSC(int tipoProceso,int idNodo, int msqidNodo){
 	proceso p;
 	p.type = 2;
 	p.idNodo = idNodo;
 	p.tipo = tipoProceso;
 	p.pid = getpid();
 
-	int status = msgsnd(msqid, &p, sizeof(proceso), 0);
+	int status = msgsnd(msqidNodo, &p, sizeof(proceso), 0);
 	if(status==-1){
 		printf("Error al enviar mensaje salida proceso %i\n", getpid());
 		exit(0);
