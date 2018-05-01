@@ -282,7 +282,6 @@ void asignToken(){
 			}
 			lectores += leyendo[i];
 		}
-		printf("%i %i %i %i\n", numProcesos[tipoPago], numProcesos[tipoAnulacion], numProcesos[tipoReserva], numProcesos[tipoGradaEvento]);
 		if(prioOtro == tipoPago && leyendo[idNodo]==0){
 				printf("Nodo %i [%lld]: Nodo %i tiene mayor prioridad\n", idNodo, getTimestamp(), otroNodo);
 				sendToken(otroNodo);
@@ -360,7 +359,7 @@ void asignToken(){
 			}
 		}
 		else {
-			if(prioOtro == 1 ){
+			if(prioOtro == tipoGradaEvento ){
 				if(myPrio < tipoReserva){
 					if(lectores < lectoresSC){
 						sendToken(otroNodo);

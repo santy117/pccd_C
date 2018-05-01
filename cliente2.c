@@ -76,101 +76,88 @@ int main(int argc, char* argv[]){
 	struct sched_param param;
 	param.sched_priority = 90;
 	sched_setscheduler(getpid(), SCHED_FIFO, &param);
+    
+    int i, pid;
 
-	int pid, i;
-	for(i=0; i<20; i++){
-		pid = fork();
-		if(pid == -1){
-			printf("Error al crear proceso hijo\n");
-			exit(0);
-		}
-		else if(pid == 0){
-			param.sched_priority = 70;
-			sched_setscheduler(getpid(), SCHED_FIFO, &param);
-			reserva(idNodo1, msqid1);
-			return 0;
-		}
-	}
-	for(i=0; i<10; i++){
-		pid = fork();
-		if(pid == -1){
-			printf("Error al crear proceso hijo\n");
-			exit(0);
-		}
-		else if(pid == 0){
-			param.sched_priority = 70;
-			sched_setscheduler(getpid(), SCHED_FIFO, &param);
-			pago(idNodo3, msqid3);
-			return 0;
-		}
-	}
+    for(i=0; i<50; i++){
+        pid = fork();
+        if(pid == -1){
+            exit(0);
+        }
+        else if(pid == 0){
+            switch(i%4){
+                case 0:
+                    param.sched_priority = 70;
+			        sched_setscheduler(getpid(), SCHED_FIFO, &param);
+			        reserva(idNodo4, msqid4);
+                    break;
+                case 1:
+                    param.sched_priority = 70;
+			        sched_setscheduler(getpid(), SCHED_FIFO, &param);
+			        reserva(idNodo1, msqid1);
+                    break;
+                case 2:
+                    param.sched_priority = 70;
+			        sched_setscheduler(getpid(), SCHED_FIFO, &param);
+			        reserva(idNodo2, msqid2);
+                    break;
+                case 3:
+                    param.sched_priority = 70;
+			        sched_setscheduler(getpid(), SCHED_FIFO, &param);
+			        reserva(idNodo3, msqid3);
+                    break;
+                default:
+                    param.sched_priority = 70;
+			        sched_setscheduler(getpid(), SCHED_FIFO, &param);
+			        reserva(idNodo4, msqid4);
+                    break;
+            }
+            return 0;
+        }
+    }
 
-	for(i=0; i<27; i++)
-		wait(&pid);
-	
-	for(i=0; i<15; i++){
-		pid = fork();
-		if(pid == -1){
-			printf("Error al crear proceso hijo\n");
-			exit(0);
-		}
-		else if(pid == 0){
-			param.sched_priority = 70;
-			sched_setscheduler(getpid(), SCHED_FIFO, &param);
-			anulacion(idNodo2, msqid2);
-			return 0;
-		}
-	}
 
-	for(i=0; i<16; i++)
-		wait(&pid);
+    for(i=0; i<50; i++){
+        pid = fork();
+        if(pid == -1){
+            exit(0);
+        }
+        else if(pid == 0){
+            switch(i%4){
+                case 0:
+                    param.sched_priority = 70;
+			        sched_setscheduler(getpid(), SCHED_FIFO, &param);
+			        pago(idNodo4, msqid4);
+                    break;
+                case 1:
+                    param.sched_priority = 70;
+			        sched_setscheduler(getpid(), SCHED_FIFO, &param);
+			        pago(idNodo1, msqid1);
+                    break;
+                case 2:
+                    param.sched_priority = 70;
+			        sched_setscheduler(getpid(), SCHED_FIFO, &param);
+			        pago(idNodo2, msqid2);
+                    break;
+                case 3:
+                    param.sched_priority = 70;
+			        sched_setscheduler(getpid(), SCHED_FIFO, &param);
+			        pago(idNodo3, msqid3);
+                    break;
+                default:
+                    param.sched_priority = 70;
+			        sched_setscheduler(getpid(), SCHED_FIFO, &param);
+			        pago(idNodo4, msqid4);
+                    break;
+            }
+            return 0;
+        }
+    }
 
-	for(i=0; i<6; i++){
-		pid = fork();
-		if(pid == -1){
-			printf("Error al crear proceso hijo\n");
-			exit(0);
-		}
-		else if(pid == 0){
-			sched_setscheduler(getpid(), SCHED_FIFO, &param);
-			grada(idNodo4, msqid4);
-			return 0;
-		}
-	}
+    for(i=0; i<100; i++)
+        wait(&pid);
 
-	for(i=0; i<6; i++){
-		pid = fork();
-		if(pid == -1){
-			printf("Error al crear proceso hijo\n");
-			exit(0);
-		}
-		else if(pid == 0){
-			sched_setscheduler(getpid(), SCHED_FIFO, &param);
-			evento(idNodo1, msqid1);
-			return 0;
-		}
-	}
-
-	for(i=0; i<12; i++)
-		wait(&pid);
-
-	for(i=0; i<10; i++){
-		pid = fork();
-		if(pid == -1){
-			printf("Error al crear proceso hijo\n");
-			exit(0);
-		}
-		else if(pid == 0){
-			sched_setscheduler(getpid(), SCHED_FIFO, &param);
-			anulacion(idNodo1, msqid1);
-			return 0;
-		}
-	}
-
-	for(i=0; i<12; i++)
-		wait(&pid);
-	
-	return 0;
+    return 0;
 }
 
 void pago(int idNodo, int msqidNodo){
